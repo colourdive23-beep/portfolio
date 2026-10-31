@@ -214,14 +214,22 @@ html.has-circle-cursor,html.has-circle-cursor *{cursor:none !important;}
 
 /* Left slide-in menu — plain white '☰ Menu' at the screen's left edge; panel (white 80% + light blur) reuses the .main-nav link styles */
 /* header-left = [Menu →][logo] pinned to the screen's left edge; the nav keeps its place on the right */
-.header-left{position:absolute;left:28px;top:50%;transform:translateY(-50%);display:flex;align-items:center;gap:36px;}
-.site-header-inner{justify-content:flex-end;min-height:100px;}  /* = 48px logo + 2×26px padding, the header's original height */
-.menu-btn{display:inline-flex;align-items:center;gap:10px;font:inherit;font-size:13px;font-weight:500;color:#fff;background:none;border:0;padding:8px 0;cursor:pointer;transition:opacity .15s ease;}
+.header-left{position:absolute;left:28px;top:50%;transform:translateY(-50%);display:flex;align-items:center;gap:40px;}
+/* full-width header: Menu + logo at the left edge, links at the right edge (28px each side) */
+.site-header-inner{max-width:none;justify-content:flex-end;min-height:112px;}  /* = 60px logo + 2×26px padding */
+.site-header .brand-logo{height:60px;}
+.site-header .main-nav a{font-size:16px;padding:8px 14px;}
+.site-header .main-nav{margin-right:-14px;}  /* last link's text lines up 28px from the edge, mirroring Menu */
+.menu-btn{display:inline-flex;align-items:center;gap:12px;font:inherit;font-size:16px;font-weight:500;color:#fff;background:none;border:0;padding:8px 0;cursor:pointer;transition:opacity .15s ease;}
 .menu-btn:hover{opacity:.7;}
-.menu-icon{display:block;width:16px;height:1.5px;margin:5px 0;background:currentColor;box-shadow:0 -5px 0 currentColor,0 5px 0 currentColor;}  /* three lines */
+.menu-icon{display:block;width:20px;height:1.5px;margin:6px 0;background:currentColor;box-shadow:0 -6px 0 currentColor,0 6px 0 currentColor;}  /* three lines */
 @media (max-width:760px){
   .header-left{position:static;transform:none;gap:20px;}
-  .site-header-inner{justify-content:space-between;flex-wrap:wrap;}
+  .site-header-inner{justify-content:space-between;flex-wrap:wrap;min-height:0;}
+  .site-header .brand-logo{height:48px;}
+  .menu-btn{font-size:15px;}
+  .site-header .main-nav a{font-size:14px;padding:8px 12px;}
+  .site-header .main-nav{margin:0 0 0 -12px;}
 }
 /* blur radius is fixed (animating it re-blurs the screen on the main thread every frame); only opacity/transform animate.
    When closed, visibility:hidden (after the exit animation) stops the backdrop blur from being computed at all. */
