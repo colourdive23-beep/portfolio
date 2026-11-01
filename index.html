@@ -172,8 +172,8 @@ a:focus-visible,button:focus-visible,.thumb:focus-visible{outline:2px solid var(
 /* phones: the keyword line moves below the glass folder (at the top it crowded the header) — a second copy outside
    the stage is shown instead; the empty band above the title is trimmed */
 .cover .c-marquee-m,.cover .c-hint{display:none;}
-/* press & hold areas: a long press must not select text or open the link/image callout */
-.cover-stage,.cover .c-hint,.cover .c-marquee,.toc .t-hint,.toc .cat-card{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;}
+/* no text selection anywhere (a long press must not highlight text or open the link/image callout) */
+html,body{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;}
 @media (max-width:760px){
   .cover-stage .c-marquee{display:none;}
   .cover .c-marquee-m{display:block;position:relative;top:auto;left:auto;padding:30px 0 22px;}
