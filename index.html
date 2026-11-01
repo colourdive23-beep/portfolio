@@ -169,6 +169,12 @@ a:focus-visible,button:focus-visible,.thumb:focus-visible{outline:2px solid var(
   font-size:1.667cqw;line-height:1.2;letter-spacing:.02em;text-transform:uppercase;white-space:nowrap;color:#fff;}
 .cover .c-marquee li:nth-child(even){color:rgba(255,255,255,.55);}
 .cover .c-marquee li::after{content:"";width:.417cqw;height:.417cqw;border-radius:50%;background:rgba(255,255,255,.45);}
+/* phones: the keywords at 1.667cqw are ~6px — scale them up (≈14px at 390px) */
+@container (max-width:760px){
+  .cover .c-marquee{top:4%;}
+  .cover .c-marquee li{font-size:min(3.6cqw,18px);gap:min(4cqw,24px);padding-right:min(4cqw,24px);}
+  .cover .c-marquee li::after{width:.9cqw;height:.9cqw;}
+}
 @keyframes c-marquee{from{transform:translateX(0);}to{transform:translateX(-50%);}}
 @media (prefers-reduced-motion:reduce){.cover .c-marquee{opacity:1;}.cover .c-marquee-track{animation:none;}}
 
@@ -201,12 +207,10 @@ a:focus-visible,button:focus-visible,.thumb:focus-visible{outline:2px solid var(
 }
 
 /* Invert cursor — white circle blended with difference; created by JS only for a fine hover pointer without reduced motion */
-.circle-cursor{position:fixed;top:0;left:0;width:88px;height:88px;pointer-events:none;z-index:9999;mix-blend-mode:difference;will-change:transform;}
-.circle-cursor span{display:block;width:100%;height:100%;border-radius:50%;background:#fff;opacity:0;
-  transform:scale(.8182);transition:transform .25s ease-out,opacity .2s linear;}
+.circle-cursor{position:fixed;top:0;left:0;width:72px;height:72px;pointer-events:none;z-index:9999;mix-blend-mode:difference;will-change:transform;}
+/* one constant size everywhere (no grow on links/cards, no shrink on press) */
+.circle-cursor span{display:block;width:100%;height:100%;border-radius:50%;background:#fff;opacity:0;transition:opacity .2s linear;}
 .circle-cursor.is-visible span{opacity:1;}
-.circle-cursor.is-hover span{transform:scale(1);}
-.circle-cursor.is-press span{transform:scale(.7273);transition-duration:.08s;}
 /* over photos/graphics: plain white 80% instead of inverting */
 .circle-cursor.is-image{mix-blend-mode:normal;}
 .circle-cursor.is-image.is-visible span{opacity:.8;}
@@ -223,13 +227,14 @@ html.has-circle-cursor,html.has-circle-cursor *{cursor:none !important;}
 .menu-btn{display:inline-flex;align-items:center;gap:12px;font:inherit;font-size:16px;font-weight:500;color:#fff;background:none;border:0;padding:8px 0;cursor:pointer;transition:opacity .15s ease;}
 .menu-btn:hover{opacity:.7;}
 .menu-icon{display:block;width:20px;height:1.5px;margin:6px 0;background:currentColor;box-shadow:0 -6px 0 currentColor,0 6px 0 currentColor;}  /* three lines */
+/* mobile: no Menu control (the links are already on screen) — logo centred, links centred under it */
 @media (max-width:760px){
-  .header-left{position:static;transform:none;gap:20px;}
-  .site-header-inner{justify-content:space-between;flex-wrap:wrap;min-height:0;}
+  .header-left{position:static;transform:none;justify-content:center;}
+  .menu-btn{display:none;}
+  .site-header-inner{flex-direction:column;justify-content:center;align-items:center;flex-wrap:nowrap;min-height:0;}
   .site-header .brand-logo{height:48px;}
-  .menu-btn{font-size:15px;}
+  .site-header .main-nav{margin:0;justify-content:center;}
   .site-header .main-nav a{font-size:14px;padding:8px 12px;}
-  .site-header .main-nav{margin:0 0 0 -12px;}
 }
 /* blur radius is fixed (animating it re-blurs the screen on the main thread every frame); only opacity/transform animate.
    When closed, visibility:hidden (after the exit animation) stops the backdrop blur from being computed at all. */
@@ -1025,7 +1030,7 @@ html.menu-open{overflow:hidden;scrollbar-gutter:stable;}
   if(!window.matchMedia) return;
   var mqFine = matchMedia('(hover: hover) and (pointer: fine)');
   var mqReduce = matchMedia('(prefers-reduced-motion: reduce)');
-  var SIZE = 88, TAU = 90;   // box px; trailing time constant ms (≈80–120ms lag)
+  var SIZE = 72, TAU = 90;   // box px; trailing time constant ms (≈80–120ms lag)
   var HOVER = 'a, button, [role="button"], .thumb, label, summary';
   // photos & graphics get a plain white circle; text, logos, typography and backgrounds get the invert
   var IMAGE = '.thumb, .video-thumb, video, .profile-photo, .shot, .cat-card img, .lightbox img, .c-glass, .toc .t-base';
