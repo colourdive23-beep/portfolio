@@ -781,7 +781,9 @@ html.menu-open{overflow:hidden;scrollbar-gutter:stable;}
   var sheen = glass.querySelector('.c-sheen'), spot = sheen.firstElementChild;
   var refr = glass.querySelector('.c-refr');
   var PERSPECTIVE = new DOMMatrix([1,0,0,0, 0,1,0,0, 0,0,1,-1/1000, 0,0,0,1]);
-  var MAX_X = 7, MAX_Y = 9, RETURN_MS = 600, FOLLOW = 0.14;
+  var MAX_X = 7, MAX_Y = 9, SHEEN = 1, RETURN_MS = 600, FOLLOW = 0.14;
+  var DESK = { x:7, y:9, s:1, g:1, f:.14 }, TOUCH = { x:18, y:22, s:2.2, g:2.6, f:.32 };   // touch: more tilt/sheen, g = finger gain, f = follow speed
+  var GAIN = 1, wob = null;   // wob: damped wobble kicked off by each press (touch screens)
   // visible folder area inside the 1440×900 stage (Layer 3: 128,387 → 1312,900)
   var BOX = { l:128/1440, t:387/900, w:1184/1440, h:513/900 };
   var mqFine = matchMedia('(hover: hover) and (pointer: fine)');
@@ -820,8 +822,15 @@ html.menu-open{overflow:hidden;scrollbar-gutter:stable;}
     var det = a*A + b*D + c*G;
     return 'matrix3d(' + [A/det, D/det, 0, G/det, B/det, E/det, 0, H/det, 0, 0, 1, 0, C/det, F/det, 0, I/det].join(',') + ')';
   }
-  function apply(){
-    var rx = +clamp(cur.rx, -MAX_X, MAX_X).toFixed(3), ry = +clamp(cur.ry, -MAX_Y, MAX_Y).toFixed(3);
+  function apply(now){
+    var wx = 0, wy = 0;
+    if(wob && now){
+      var s = (now - wob.t0) / 1000;
+      if(s > 1.6) wob = null;
+      else { var amp = 12*Math.exp(-s*3.2)*Math.sin(s*17); wx = -wob.dy*amp; wy = wob.dx*amp; }
+    }
+    var lim = wob ? 1.6 : 1;
+    var rx = +clamp(cur.rx + wx, -MAX_X*lim, MAX_X*lim).toFixed(3), ry = +clamp(cur.ry + wy, -MAX_Y*lim, MAX_Y*lim).toFixed(3);
     stage.style.setProperty('--rx', rx + 'deg');
     stage.style.setProperty('--ry', ry + 'deg');
     refr.style.transform = counter(rx, ry);
@@ -836,17 +845,17 @@ html.menu-open{overflow:hidden;scrollbar-gutter:stable;}
       // ambient sway: a virtual pointer drifting slowly over the folder
       var a = now / 1000;
       hasPointer = true;
-      px = rect.x + rect.w*(.5 + .34*Math.sin(a*.8));
-      py = rect.y + rect.h*(.5 + .30*Math.sin(a*1.1 + 1.2));
+      px = rect.x + rect.w*(.5 + .46*Math.sin(a*.9));
+      py = rect.y + rect.h*(.5 + .44*Math.sin(a*1.25 + 1.2));
     }
     var inside = hasPointer && px >= rect.x && px <= rect.x + rect.w && py >= rect.y && py <= rect.y + rect.h;
     var more;
     if(inside){
       ret = null;
-      var nx = clamp((px - rect.x - rect.w/2) / (rect.w/2), -1, 1);
-      var ny = clamp((py - rect.y - rect.h/2) / (rect.h/2), -1, 1);
+      var nx = clamp((px - rect.x - rect.w/2) / (rect.w/2) * (touching ? GAIN : 1), -1, 1);
+      var ny = clamp((py - rect.y - rect.h/2) / (rect.h/2) * (touching ? GAIN : 1), -1, 1);
       var k = 1 - Math.pow(1 - FOLLOW, dt / 16.667);
-      var t = { rx:-ny*MAX_X, ry:nx*MAX_Y, o:.08 + .10*Math.min(1, Math.sqrt(nx*nx + ny*ny)), gx:px - rect.x, gy:py - rect.y };
+      var t = { rx:-ny*MAX_X, ry:nx*MAX_Y, o:(.08 + .10*Math.min(1, Math.sqrt(nx*nx + ny*ny)))*SHEEN, gx:px - rect.x, gy:py - rect.y };
       more = false;
       for(var key in t){
         cur[key] += (t[key] - cur[key]) * k;
@@ -858,7 +867,7 @@ html.menu-open{overflow:hidden;scrollbar-gutter:stable;}
       cur.rx = ret.rx*e; cur.ry = ret.ry*e; cur.o = ret.o*e;
       more = p < 1;
     }
-    apply();
+    apply(now);
     if(mode === 'touch') more = true;
     if(more) raf = requestAnimationFrame(frame);
     else { last = 0; if(!inside){ ret = null; stage.classList.remove('is-tilting'); } }
@@ -876,6 +885,11 @@ html.menu-open{overflow:hidden;scrollbar-gutter:stable;}
   function onTouch(e){
     var t = e.touches[0]; if(!t) return;
     touching = true; hasPointer = true; px = t.clientX; py = t.clientY; rect = null;
+    if(e.type === 'touchstart'){
+      // every press sets off a springy wobble, pushed away from the finger (direction from the folder centre)
+      var r = measure(), dx = px - (r.x + r.w/2), dy = py - (r.y + r.h/2), d = Math.sqrt(dx*dx + dy*dy);
+      wob = d < 8 ? { t0:performance.now(), dx:0, dy:-1 } : { t0:performance.now(), dx:dx/d, dy:dy/d };
+    }
     kick();
   }
   function onTouchEnd(e){ if(!e.touches.length) touching = false; }
@@ -895,6 +909,8 @@ html.menu-open{overflow:hidden;scrollbar-gutter:stable;}
     var prev = mode;
     mode = want;
     enabled = want !== 'off';
+    var c = want === 'touch' ? TOUCH : DESK;
+    MAX_X = c.x; MAX_Y = c.y; SHEEN = c.s; GAIN = c.g; FOLLOW = c.f; wob = null;
     glass.dataset.tilt = enabled ? 'on' : 'off';
     if(prev === 'mouse'){
       stage.removeEventListener('pointermove', onMove);
@@ -955,7 +971,8 @@ html.menu-open{overflow:hidden;scrollbar-gutter:stable;}
   var toc = document.querySelector('.toc');
   if(!toc || !('IntersectionObserver' in window) || !window.matchMedia) return;
   var RADIUS = 180, INNER = 60, MAX = 65, ROT = 8;
-  var DESK = { RADIUS:180, INNER:60, MAX:65 }, TOUCH = { RADIUS:130, INNER:40, MAX:42 };   // smaller cards on phones
+  var DESK = { RADIUS:180, INNER:60, MAX:65, ROT:8 }, TOUCH = { RADIUS:170, INNER:60, MAX:70, ROT:14 };   // phones: stronger so it reads on a small screen
+  var FLOAT = 0;   // touch screens: idle float amplitude (px) so the objects visibly move before any touch
   var K = 45, C = 11.4;                 // spring: ω≈6.7 rad/s, ζ≈0.85 → settles in ~0.7s, <1% overshoot
   var objs = [].map.call(toc.querySelectorAll('.t-deco'), function(d){
     return { card:d.parentNode, cx:+d.dataset.cx, cy:+d.dataset.cy, reps:d.querySelectorAll('.t-rep'),
@@ -1010,10 +1027,13 @@ html.menu-open{overflow:hidden;scrollbar-gutter:stable;}
       // never further than MAX from the rest position, even mid-spring
       var m = Math.sqrt(o.x*o.x + o.y*o.y);
       if(m > MAX){ o.x *= MAX/m; o.y *= MAX/m; }
-      var t = (o.x || o.y || o.r) ? 'translate3d(' + o.x.toFixed(2) + 'px,' + o.y.toFixed(2) + 'px,0) rotate(' + o.r.toFixed(2) + 'deg)' : '';
+      var fx = 0, fy = 0, fr = 0;
+      if(FLOAT){ var a = now/1000*1.3 + i*1.7; fy = Math.sin(a)*FLOAT; fx = Math.sin(a*.7 + 1)*FLOAT*.4; fr = Math.sin(a*.8)*3; }
+      var X = o.x + fx, Y = o.y + fy, Rr = o.r + fr;
+      var t = (X || Y || Rr) ? 'translate3d(' + X.toFixed(2) + 'px,' + Y.toFixed(2) + 'px,0) rotate(' + Rr.toFixed(2) + 'deg)' : '';
       for(var j = 0; j < o.reps.length; j++) o.reps[j].style.transform = t;
     }
-    if(moving) raf = requestAnimationFrame(frame);
+    if(moving || FLOAT) raf = requestAnimationFrame(frame);
     else { last = 0; toc.classList.remove('is-repelling'); }
   }
   function kick(){ toc.classList.add('is-repelling'); if(!raf) raf = requestAnimationFrame(frame); }
@@ -1048,7 +1068,7 @@ html.menu-open{overflow:hidden;scrollbar-gutter:stable;}
     mode = want; enabled = want !== 'off';
     toc.dataset.repel = enabled ? 'on' : 'off';
     var c = want === 'touch' ? TOUCH : DESK;
-    RADIUS = c.RADIUS; INNER = c.INNER; MAX = c.MAX;
+    RADIUS = c.RADIUS; INNER = c.INNER; MAX = c.MAX; ROT = c.ROT; FLOAT = want === 'touch' ? 7 : 0;
     if(prev === 'mouse'){
       document.removeEventListener('pointermove', onMove);
       document.removeEventListener('pointerout', onOut);
@@ -1066,6 +1086,7 @@ html.menu-open{overflow:hidden;scrollbar-gutter:stable;}
       document.addEventListener('touchmove', onTouch, { passive:true });
       document.addEventListener('touchend', onTouchEnd, { passive:true });
       document.addEventListener('touchcancel', onTouchEnd, { passive:true });
+      kick();   // start the idle float
     }
     if(prev === 'off' && enabled){
       window.addEventListener('scroll', onScroll, { passive:true });
