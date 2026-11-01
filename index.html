@@ -772,7 +772,8 @@ html.menu-open{overflow:hidden;scrollbar-gutter:stable;}
   window.addEventListener('pagehide', function(e){ if(!e.persisted) io.disconnect(); });
 })();
 
-// Cover glass folder — pointer tilt (desktop fine pointer only, after the folder scrolls into view)
+// Cover glass folder — tilt: follows the mouse on desktop; on touch screens it sways on its own and follows a finger
+// (only while the folder is in view)
 (function(){
   var stage = document.querySelector('.cover-stage');
   var glass = stage && stage.querySelector('.c-glass');
@@ -787,6 +788,7 @@ html.menu-open{overflow:hidden;scrollbar-gutter:stable;}
   var mqReduce = matchMedia('(prefers-reduced-motion: reduce)');
   var inView = false, enabled = false, raf = 0, rect = null, last = 0;
   var hasPointer = false, px = 0, py = 0, ret = null;
+  var mode = 'off', touching = false;   // mode: 'off' | 'mouse' | 'touch' (touch = ambient sway + finger)
   var cur = { rx:0, ry:0, o:0, gx:0, gy:0 };
 
   function clamp(v, a, b){ return v < a ? a : v > b ? b : v; }
@@ -830,6 +832,13 @@ html.menu-open{overflow:hidden;scrollbar-gutter:stable;}
     raf = 0;
     var dt = last ? Math.min(64, now - last) : 16.667; last = now;
     if(!rect) rect = measure();
+    if(mode === 'touch' && !touching){
+      // ambient sway: a virtual pointer drifting slowly over the folder
+      var a = now / 1000;
+      hasPointer = true;
+      px = rect.x + rect.w*(.5 + .34*Math.sin(a*.8));
+      py = rect.y + rect.h*(.5 + .30*Math.sin(a*1.1 + 1.2));
+    }
     var inside = hasPointer && px >= rect.x && px <= rect.x + rect.w && py >= rect.y && py <= rect.y + rect.h;
     var more;
     if(inside){
@@ -850,6 +859,7 @@ html.menu-open{overflow:hidden;scrollbar-gutter:stable;}
       more = p < 1;
     }
     apply();
+    if(mode === 'touch') more = true;
     if(more) raf = requestAnimationFrame(frame);
     else { last = 0; if(!inside){ ret = null; stage.classList.remove('is-tilting'); } }
   }
@@ -863,10 +873,16 @@ html.menu-open{overflow:hidden;scrollbar-gutter:stable;}
     kick();
   }
   function onLeave(){ hasPointer = false; kick(); }
+  function onTouch(e){
+    var t = e.touches[0]; if(!t) return;
+    touching = true; hasPointer = true; px = t.clientX; py = t.clientY; rect = null;
+    kick();
+  }
+  function onTouchEnd(e){ if(!e.touches.length) touching = false; }
   function invalidate(){ rect = null; }
   function reset(){
     if(raf) cancelAnimationFrame(raf);
-    raf = 0; last = 0; ret = null; hasPointer = false; rect = null;
+    raf = 0; last = 0; ret = null; hasPointer = false; touching = false; rect = null;
     cur.rx = cur.ry = cur.o = 0;
     apply();
     stage.classList.remove('is-tilting');
@@ -874,20 +890,42 @@ html.menu-open{overflow:hidden;scrollbar-gutter:stable;}
   var menuOpen = false;
   function onMenu(e){ menuOpen = e.detail.open; update(); }
   function update(){
-    var want = inView && mqFine.matches && !mqReduce.matches && !menuOpen;
-    if(want === enabled) return;
-    enabled = want;
-    glass.dataset.tilt = want ? 'on' : 'off';
-    if(want){
-      stage.addEventListener('pointermove', onMove, { passive:true });
-      stage.addEventListener('pointerleave', onLeave, { passive:true });
-      window.addEventListener('scroll', invalidate, { passive:true });
-      window.addEventListener('resize', invalidate, { passive:true });
-    } else {
+    var want = inView && !mqReduce.matches && !menuOpen ? (mqFine.matches ? 'mouse' : 'touch') : 'off';
+    if(want === mode) return;
+    var prev = mode;
+    mode = want;
+    enabled = want !== 'off';
+    glass.dataset.tilt = enabled ? 'on' : 'off';
+    if(prev === 'mouse'){
       stage.removeEventListener('pointermove', onMove);
       stage.removeEventListener('pointerleave', onLeave);
+    } else if(prev === 'touch'){
+      stage.removeEventListener('touchstart', onTouch);
+      stage.removeEventListener('touchmove', onTouch);
+      window.removeEventListener('touchend', onTouchEnd);
+      window.removeEventListener('touchcancel', onTouchEnd);
+    }
+    if(prev !== 'off' && !enabled){
       window.removeEventListener('scroll', invalidate);
       window.removeEventListener('resize', invalidate);
+    }
+    if(prev === 'off' && enabled){
+      window.addEventListener('scroll', invalidate, { passive:true });
+      window.addEventListener('resize', invalidate, { passive:true });
+    }
+    if(want === 'mouse'){
+      hasPointer = false;
+      stage.addEventListener('pointermove', onMove, { passive:true });
+      stage.addEventListener('pointerleave', onLeave, { passive:true });
+      if(prev === 'touch') kick();
+    } else if(want === 'touch'){
+      stage.addEventListener('touchstart', onTouch, { passive:true });
+      stage.addEventListener('touchmove', onTouch, { passive:true });
+      window.addEventListener('touchend', onTouchEnd, { passive:true });
+      window.addEventListener('touchcancel', onTouchEnd, { passive:true });
+      ret = null; kick();
+    } else {
+      touching = false;
       if(menuOpen && inView){ hasPointer = false; kick(); } else reset();
     }
   }
@@ -912,11 +950,12 @@ html.menu-open{overflow:hidden;scrollbar-gutter:stable;}
   glass._tiltDestroy = destroy;
 })();
 
-// Index 3D objects — mouse repulsion (desktop fine pointer only, while the index is in view)
+// Index 3D objects — repulsion from the mouse, or from a finger on touch screens (while the index is in view)
 (function(){
   var toc = document.querySelector('.toc');
   if(!toc || !('IntersectionObserver' in window) || !window.matchMedia) return;
   var RADIUS = 180, INNER = 60, MAX = 65, ROT = 8;
+  var DESK = { RADIUS:180, INNER:60, MAX:65 }, TOUCH = { RADIUS:130, INNER:40, MAX:42 };   // smaller cards on phones
   var K = 45, C = 11.4;                 // spring: ω≈6.7 rad/s, ζ≈0.85 → settles in ~0.7s, <1% overshoot
   var objs = [].map.call(toc.querySelectorAll('.t-deco'), function(d){
     return { card:d.parentNode, cx:+d.dataset.cx, cy:+d.dataset.cy, reps:d.querySelectorAll('.t-rep'),
@@ -983,6 +1022,11 @@ html.menu-open{overflow:hidden;scrollbar-gutter:stable;}
     hasPointer = true; px = e.clientX; py = e.clientY; kick();
   }
   function onOut(e){ if(!e.relatedTarget){ hasPointer = false; kick(); } }
+  function onTouch(e){
+    var t = e.touches[0]; if(!t) return;
+    hasPointer = true; px = t.clientX; py = t.clientY; kick();
+  }
+  function onTouchEnd(e){ if(!e.touches.length){ hasPointer = false; kick(); } }
   function onScroll(){ dirty = true; if(hasPointer) kick(); }
   function onResize(){ dirty = true; }
   function reset(){
@@ -996,23 +1040,41 @@ html.menu-open{overflow:hidden;scrollbar-gutter:stable;}
   }
   var menuOpen = false;
   function onMenu(e){ menuOpen = e.detail.open; update(); }
+  var mode = 'off';
   function update(){
-    var want = inView && mqFine.matches && !mqReduce.matches && !menuOpen;
-    if(want === enabled) return;
-    enabled = want;
-    toc.dataset.repel = want ? 'on' : 'off';
-    if(want){
-      document.addEventListener('pointermove', onMove, { passive:true });
-      document.addEventListener('pointerout', onOut, { passive:true });
-      window.addEventListener('scroll', onScroll, { passive:true });
-      window.addEventListener('resize', onResize, { passive:true });
-    } else {
+    var want = inView && !mqReduce.matches && !menuOpen ? (mqFine.matches ? 'mouse' : 'touch') : 'off';
+    if(want === mode) return;
+    var prev = mode;
+    mode = want; enabled = want !== 'off';
+    toc.dataset.repel = enabled ? 'on' : 'off';
+    var c = want === 'touch' ? TOUCH : DESK;
+    RADIUS = c.RADIUS; INNER = c.INNER; MAX = c.MAX;
+    if(prev === 'mouse'){
       document.removeEventListener('pointermove', onMove);
       document.removeEventListener('pointerout', onOut);
+    } else if(prev === 'touch'){
+      document.removeEventListener('touchstart', onTouch);
+      document.removeEventListener('touchmove', onTouch);
+      document.removeEventListener('touchend', onTouchEnd);
+      document.removeEventListener('touchcancel', onTouchEnd);
+    }
+    if(want === 'mouse'){
+      document.addEventListener('pointermove', onMove, { passive:true });
+      document.addEventListener('pointerout', onOut, { passive:true });
+    } else if(want === 'touch'){
+      document.addEventListener('touchstart', onTouch, { passive:true });
+      document.addEventListener('touchmove', onTouch, { passive:true });
+      document.addEventListener('touchend', onTouchEnd, { passive:true });
+      document.addEventListener('touchcancel', onTouchEnd, { passive:true });
+    }
+    if(prev === 'off' && enabled){
+      window.addEventListener('scroll', onScroll, { passive:true });
+      window.addEventListener('resize', onResize, { passive:true });
+    } else if(prev !== 'off' && !enabled){
       window.removeEventListener('scroll', onScroll);
       window.removeEventListener('resize', onResize);
       if(menuOpen && inView){ hasPointer = false; kick(); } else reset();
-    }
+    } else { hasPointer = false; kick(); }
   }
   function listen(mq){ mq.addEventListener ? mq.addEventListener('change', update) : mq.addListener(update); }
   function unlisten(mq){ mq.removeEventListener ? mq.removeEventListener('change', update) : mq.removeListener(update); }
