@@ -231,9 +231,10 @@ html.has-circle-cursor,html.has-circle-cursor *{cursor:none !important;}
 @media (max-width:760px){
   .header-left{position:static;transform:none;justify-content:center;}
   .menu-btn{display:none;}
-  .site-header-inner{flex-direction:column;justify-content:center;align-items:center;flex-wrap:nowrap;min-height:0;}
-  .site-header .brand-logo{height:48px;}
-  .site-header .main-nav{margin:0;justify-content:center;}
+  /* the header stays pinned while scrolling: keep it compact (~100px) */
+  .site-header-inner{flex-direction:column;justify-content:center;align-items:center;flex-wrap:nowrap;min-height:0;gap:2px;padding-top:14px;padding-bottom:6px;}
+  .site-header .brand-logo{height:40px;}
+  .site-header .main-nav{margin:0;justify-content:center;gap:4px;}
   .site-header .main-nav a{font-size:14px;padding:8px 12px;}
 }
 /* blur radius is fixed (animating it re-blurs the screen on the main thread every frame); only opacity/transform animate.
